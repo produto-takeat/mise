@@ -27,8 +27,8 @@ jobs:
           npx cap add ios
           npx cap sync ios
           cp assets/icon-ios-1024.png ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png
-          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Mise" ios/App/App/Info.plist || \
-            /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string Mise" ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName 'Mise en Place'" ios/App/App/Info.plist || \
+            /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string 'Mise en Place'" ios/App/App/Info.plist
       - name: Compilar (sem assinatura)
         working-directory: app/ios/App
         run: |
