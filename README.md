@@ -1,7 +1,7 @@
 # Mise en Place
 
 App de treinamento do produto Takeat no estilo Duolingo (antigo TakeatHub Academy).
-O app se chama **Mise en Place**; o **Mise** é o personagem (o ratinho chef, de *mice*), que também é a voz do app.
+O app se chama **Mise en Place**; a **Mise** é a personagem (a ratinha chef, de *mice*), que também é a voz do app.
 
 - **Web (PWA):** https://produto-takeat.github.io/mise/
 - **Android e iOS:** [Releases](https://github.com/produto-takeat/mise/releases)
