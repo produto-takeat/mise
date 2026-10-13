@@ -43,7 +43,7 @@ jobs:
         with:
           name: mise-ios-build-${{ github.run_number }}
           path: mise-ios-build-${{ github.run_number }}.ipa
-      - name: Publicar release (sem virar a "mais recente": o atualizador do Android lê a última)
+      - name: "Publicar release (não vira a mais recente, o atualizador do Android lê a última)"
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ios-build-${{ github.run_number }}
