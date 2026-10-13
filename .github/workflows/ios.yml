@@ -1,0 +1,52 @@
+name: iOS (IPA)
+# Gera o app de iOS do Mise num Mac do GitHub Actions.
+# Sem conta Apple Developer, sai um .ipa NÃO assinado: para instalar no iPhone ele precisa ser
+# reassinado com um Apple ID (Sideloadly/AltStore, renovação a cada 7 dias). Com a conta paga
+# (US$ 99/ano) dá para assinar aqui mesmo e mandar para o TestFlight.
+on:
+  push: { branches: [main] }
+  workflow_dispatch:
+permissions: { contents: write }
+concurrency: { group: ios, cancel-in-progress: false }
+jobs:
+  ipa:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v5
+      - name: Extrair projeto
+        run: mkdir app && cd app && unzip -q ../projeto.zip
+      - uses: actions/setup-node@v5
+        with: { node-version: 22 }
+      - name: Build web (produção)
+        working-directory: app
+        env: { VITE_BUILD: '${{ github.run_number }}' }
+        run: npm install --no-audit --no-fund && npm run build
+      - name: Projeto iOS (Capacitor)
+        working-directory: app
+        run: |
+          npx cap add ios
+          npx cap sync ios
+          cp assets/icon-ios-1024.png ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Mise" ios/App/App/Info.plist || \
+            /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string Mise" ios/App/App/Info.plist
+      - name: Compilar (sem assinatura)
+        working-directory: app/ios/App
+        run: |
+          xcodebuild -workspace App.xcworkspace -scheme App -configuration Release -sdk iphoneos \
+            -archivePath "$RUNNER_TEMP/Mise.xcarchive" archive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            MARKETING_VERSION=1.1.0 CURRENT_PROJECT_VERSION=${{ github.run_number }}
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -R "$RUNNER_TEMP/Mise.xcarchive/Products/Applications/App.app" "$RUNNER_TEMP/Payload/"
+          cd "$RUNNER_TEMP" && zip -qr "$GITHUB_WORKSPACE/mise-ios-build-${{ github.run_number }}.ipa" Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mise-ios-build-${{ github.run_number }}
+          path: mise-ios-build-${{ github.run_number }}.ipa
+      - name: Publicar release (sem virar a "mais recente": o atualizador do Android lê a última)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ios-build-${{ github.run_number }}
+          name: Mise iOS build ${{ github.run_number }} (não assinado)
+          files: mise-ios-build-${{ github.run_number }}.ipa
+          make_latest: false
