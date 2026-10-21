@@ -35,6 +35,8 @@ jobs:
           npx cap sync android
           cd android && sed -i 's/\r$//' gradlew && chmod +x gradlew && ./gradlew assembleRelease --no-daemon
           cp app/build/outputs/apk/release/app-release.apk ../../mise-build-${{ github.run_number }}.apk
+          # Nome fixo: o TakeatHub (Central de documentos) baixa sempre de releases/latest/download/mise.apk
+          cp app/build/outputs/apk/release/app-release.apk ../../mise.apk
       - uses: actions/upload-artifact@v4
         with:
           name: mise-build-${{ github.run_number }}
@@ -44,5 +46,7 @@ jobs:
         with:
           tag_name: build-${{ github.run_number }}
           name: Mise build ${{ github.run_number }}
-          files: mise-build-${{ github.run_number }}.apk
+          files: |
+            mise-build-${{ github.run_number }}.apk
+            mise.apk
           make_latest: true
