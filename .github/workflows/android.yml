@@ -15,33 +15,56 @@ jobs:
         with: { node-version: 22 }
       - uses: actions/setup-java@v5
         with: { distribution: temurin, java-version: 21 }
-      - name: Chave de assinatura fixa
+      # As chaves ficam SÓ nos GitHub Secrets. Rotação de 26/10/2026: a chave antiga (exposta no histórico do repositório)
+      # assina o v1/v2 (Android 8 ou mais antigo) e endossa a chave nova num lineage; a nova assina o v3 (Android 9+).
+      # Depois de atualizar, o Android 9+ recusa APK assinado só com a chave antiga. Sem os secrets o build para.
+      - name: Chaves de assinatura (GitHub Secrets)
+        env:
+          OLD_B64: ${{ secrets.MISE_KEYSTORE_B64 }}
+          NEW_B64: ${{ secrets.MISE_KEYSTORE_NOVA_B64 }}
+          OLD_PASS: ${{ secrets.MISE_KEYSTORE_PASS }}
+          NEW_PASS: ${{ secrets.MISE_KEYSTORE_NOVA_PASS }}
         run: |
-          if [ ! -f mise.keystore ]; then
-            keytool -genkeypair -keystore mise.keystore -alias mise -keyalg RSA -keysize 2048 -validity 10000 \
-              -storepass misetakeat -keypass misetakeat -dname "CN=Mise, O=Takeat, C=BR"
-            git config user.name "github-actions[bot]"
-            git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
-            git add mise.keystore && git commit -m "chore: chave de assinatura do APK [skip ci]" && git push
-          fi
+          for v in OLD_B64 NEW_B64 OLD_PASS NEW_PASS; do
+            if [ -z "${!v}" ]; then echo "::error::Falta um secret de assinatura ($v)"; exit 1; fi
+          done
+          echo "$OLD_B64" | base64 -d > "$RUNNER_TEMP/antiga.p12"
+          echo "$NEW_B64" | base64 -d > "$RUNNER_TEMP/nova.p12"
       - name: Build web (produção, sem ferramentas de teste)
         working-directory: app
         env: { VITE_BUILD: '${{ github.run_number }}' }
         run: npm install --no-audit --no-fund && npm run build
-      - name: Compilar APK de produção (release, mesma chave dos builds anteriores)
+      - name: Compilar APK de produção (release sem assinatura; assina no passo seguinte)
         working-directory: app
-        env: { BUILD_NUMBER: '${{ github.run_number }}', MISE_KEYSTORE: '${{ github.workspace }}/mise.keystore' }
+        env: { BUILD_NUMBER: '${{ github.run_number }}' }
         run: |
           npx cap sync android
           cd android && sed -i 's/\r$//' gradlew && chmod +x gradlew && ./gradlew assembleRelease --no-daemon
-          cp app/build/outputs/apk/release/app-release.apk ../../mise-build-${{ github.run_number }}.apk
+      - name: Assinar com rotação de chave (apksigner + lineage)
+        env:
+          OLD_PASS: ${{ secrets.MISE_KEYSTORE_PASS }}
+          NEW_PASS: ${{ secrets.MISE_KEYSTORE_NOVA_PASS }}
+        run: |
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          echo "build-tools: $BT"
+          "$BT/zipalign" -p -f 4 app/android/app/build/outputs/apk/release/app-release-unsigned.apk "$RUNNER_TEMP/alinhado.apk"
+          "$BT/apksigner" rotate --out "$RUNNER_TEMP/mise.lineage" \
+            --old-signer --ks "$RUNNER_TEMP/antiga.p12" --ks-key-alias mise --ks-pass env:OLD_PASS \
+            --new-signer --ks "$RUNNER_TEMP/nova.p12" --ks-key-alias mise2 --ks-pass env:NEW_PASS
+          "$BT/apksigner" sign \
+            --ks "$RUNNER_TEMP/antiga.p12" --ks-key-alias mise --ks-pass env:OLD_PASS \
+            --next-signer --ks "$RUNNER_TEMP/nova.p12" --ks-key-alias mise2 --ks-pass env:NEW_PASS \
+            --lineage "$RUNNER_TEMP/mise.lineage" --rotation-min-sdk-version 28 \
+            --out mise-build-${{ github.run_number }}.apk "$RUNNER_TEMP/alinhado.apk"
+          "$BT/apksigner" verify -v --print-certs mise-build-${{ github.run_number }}.apk
           # Nome fixo: o TakeatHub (Central de documentos) baixa sempre de releases/latest/download/mise.apk
-          cp app/build/outputs/apk/release/app-release.apk ../../mise.apk
+          cp mise-build-${{ github.run_number }}.apk mise.apk
       - uses: actions/upload-artifact@v4
         with:
           name: mise-build-${{ github.run_number }}
           path: mise-build-${{ github.run_number }}.apk
       - name: Publicar release
+        if: github.ref == 'refs/heads/main'   # em outra branch (teste manual) só compila e confere a assinatura
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
