@@ -16,6 +16,11 @@ O código do app vai em `projeto.zip` (fonte em `mise-src`). Cada push na `main`
 | `android.yml` | o APK de produção assinado (`mise-build-N.apk`), publicado como release `build-N` |
 | `ios.yml` | o IPA de iOS **não assinado** (`mise-ios-build-N.ipa`), release `ios-build-N` |
 
+**Assinatura do APK:** as chaves ficam só nos GitHub Secrets (`MISE_KEYSTORE_*`), nunca neste repositório.
+Desde 26/10/2026 o APK sai com **rotação de chave** (APK Signature Scheme v3 + lineage): a chave antiga assina o
+v1/v2 e endossa a nova, que assina o v3. O Android 9+ atualiza sem reinstalar e, depois disso, recusa APK assinado
+só com a chave antiga. Sem os secrets o build para (não gera chave nova).
+
 O IPA sem assinatura instala no iPhone reassinado com um Apple ID (Sideloadly/AltStore, renovação a cada 7 dias).
 Com a conta Apple Developer dá para assinar no workflow e distribuir pelo TestFlight.
 
